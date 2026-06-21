@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Malatya Kayısısı Don KDS v1.2</title>
+<title>Malatya Kayısısı Don KDS v1.4</title>
 
 <!-- Leaflet CSS (topografik harita) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -184,6 +184,12 @@ input.auto-filled{background:#f4faf6}
 .prep-note u{text-decoration-color:#2980b9}
 .tech-note{font-size:11px;color:#6b5c4a;line-height:1.5;margin:8px 0 0;padding-top:7px;border-top:1px dashed #e0d2b8}
 
+/* Mini refresh button in weather header */
+.refresh-mini{background:#e3f0f8;color:#0a3f64;border:1px solid #a4cadf;border-radius:9px;font-size:14px;padding:3px 8px;min-height:auto;margin-left:6px;line-height:1;vertical-align:middle;cursor:pointer;transition:transform .3s}
+.refresh-mini:hover{background:#d3e7f3}
+.refresh-mini.spinning{animation:spin360 .8s linear}
+@keyframes spin360{to{transform:rotate(360deg)}}
+
 /* Primary action emphasis */
 .btns .primary{font-size:14px;padding:11px 18px}
 
@@ -198,7 +204,7 @@ input.auto-filled{background:#f4faf6}
       <div class="logo">🌸</div>
       <div>
         <h1>Malatya Kayısısı Zirai Don Karar Destek Sistemi</h1>
-        <p>v1.2 — Ayrı risk + hazırlık · Bilimsel eşikler · Topografik harita · Canlı hava</p>
+        <p>v1.4 — Tam otomatik · Rakım düzeltmesi · Ayrı risk + hazırlık</p>
       </div>
     </div>
     <div class="badges"><span class="badge" id="netBadge">Bağlantı denetleniyor…</span></div>
@@ -297,17 +303,13 @@ input.auto-filled{background:#f4faf6}
     <aside>
       <!-- WEATHER -->
       <div class="card">
-        <h2><span class="icon">🌡️</span>Gece hava tahmini</h2>
-        <p class="help">Konumu seçtikten sonra <b>Hava verisini çek</b> tuşuna bas. İnternet yoksa değerleri elle gir.</p>
+        <h2><span class="icon">🌡️</span>Gece hava tahmini <button class="refresh-mini" type="button" id="fetchBtn" onclick="fetchWeather()" title="Hava verisini yenile">🔄</button></h2>
+        <p class="help">Hava verisi konumuna göre otomatik gelir; konumu değiştirdiğinde kendiliğinden güncellenir. İnternet yoksa değerleri elle girebilirsin.</p>
 
         <div class="feed-box" id="feedBox" style="display:none">
           <h3><span>📡 Bu Gece Tahmini</span><span class="small" id="feedSource"></span></h3>
           <div class="feed-grid" id="feedGrid"></div>
           <div style="font-size:11px;color:#3a6888;margin-top:7px" id="feedMeta"></div>
-        </div>
-
-        <div class="btns" style="margin-bottom:10px">
-          <button class="blue" type="button" id="fetchBtn" onclick="fetchWeather()">📡 Hava verisini çek</button>
         </div>
 
         <div id="diagBox" class="diag" style="display:none"></div>
@@ -354,7 +356,7 @@ input.auto-filled{background:#f4faf6}
     <details id="testDetails">
       <summary>🧪 Test ve örnek senaryolar <span class="test-warn-label">(yalnızca deneme amaçlı)</span></summary>
       <div class="test-body">
-        <p class="test-note">⚠️ <b>Dikkat:</b> Aşağıdakiler <u>gerçek tahmin değildir</u>. Uygulamanın nasıl çalıştığını görmek için hazırlanmış örnek senaryolardır. Bunlara basmak gerçek hava verisini siler ve uydurma değerler yükler. Gerçek analiz için yukarıdan "📡 Hava verisini çek" kullanın.</p>
+        <p class="test-note">⚠️ <b>Dikkat:</b> Aşağıdakiler <u>gerçek tahmin değildir</u>. Uygulamanın nasıl çalıştığını görmek için hazırlanmış örnek senaryolardır. Bunlara basmak gerçek hava verisini siler ve uydurma değerler yükler. Gerçek analiz için konumunu seç; hava verisi otomatik gelir.</p>
         <div class="btns">
           <button class="danger" type="button" onclick="demoSevere()">☠️ Örnek: Ağır don gecesi</button>
           <button class="good" type="button" onclick="demoSafe()">✅ Örnek: Düşük risk gecesi</button>
@@ -615,8 +617,17 @@ function handleNewLocation(lat,lon,fromMap,forceKey){
   el('feedBox').style.display='none';
   el('chartWrap').style.display='none';
 
-  if(isOnline) fetchElevation(lat,lon);
   analyze();
+  /* Konum değişince hava verisini de otomatik yenile (hızlı art arda değişimler için debounce).
+     fetchWeather elevation'ı da getirir. */
+  if(isOnline) scheduleWeatherRefresh();
+}
+
+/* Debounce: pin sürüklerken veya hızlı tıklarken tek çağrı yapılsın */
+var _wxTimer=null;
+function scheduleWeatherRefresh(){
+  if(_wxTimer) clearTimeout(_wxTimer);
+  _wxTimer=setTimeout(function(){ _wxTimer=null; if(isOnline) fetchWeather(); }, 700);
 }
 
 window.districtChanged=function(){
@@ -680,7 +691,7 @@ window.fetchWeather=function(){
   }
 
   var btn=el('fetchBtn');
-  btn.disabled=true; btn.textContent='⏳ Çekiliyor…';
+  btn.disabled=true; btn.classList.add('spinning');
   setStatus('Open-Meteo\'dan saatlik tahmin çekiliyor…','loading');
 
   var url='https://api.open-meteo.com/v1/forecast'
@@ -702,11 +713,11 @@ window.fetchWeather=function(){
       el('elevTag').textContent='gerçek (DEM)'; el('elevTag').className='tag live'; updateCoordChips();
     }
     processWeather(data,lat,lon);
-    btn.disabled=false; btn.textContent='🔄 Veriyi yenile';
+    btn.disabled=false; btn.classList.remove('spinning');
     el('diagBox').style.display='none';
   }).catch(function(err){
     clearTimeout(timeout);
-    btn.disabled=false; btn.textContent='📡 Hava verisini çek';
+    btn.disabled=false; btn.classList.remove('spinning');
     /* Diagnose the failure type */
     var isFileProto = location.protocol==='file:';
     if(isFileProto){
@@ -907,9 +918,18 @@ function calc(){
     else if(dg>=5){ mod+=6; modReasons.push('Çiy noktası ('+fmt(dew,1)+'°C) çok düşük: sıcaklık hızla ve derine düşebilir.'); }
     else if(dg>=3){ mod+=3; modReasons.push('Çiy noktası ('+fmt(dew,1)+'°C) düşük; soğuma hızlanabilir.'); }
   }
-  /* Rakım */
-  if(elev>1200){ mod+=4; modReasons.push('Yüksek rakım ('+elev+' m) gece soğumasını artırır.'); }
-  else if(elev>1000){ mod+=2; modReasons.push('Orta-yüksek rakım ('+elev+' m).'); }
+  /* Rakım (çifte sayım önleme):
+     Gerçek hava verisi (Open-Meteo) o konumun sıcaklığını zaten rakıma göre verir —
+     yüksek rakım = daha düşük sıcaklık ZATEN gelir. Bu durumda rakımı tekrar saymak
+     hatalı olur (double counting). Sadece sıcaklık ELLE/TAHMİNİ girildiğinde,
+     rakım için çok hafif bir düzeltme uygulanır (lapse rate'in küçük bir kısmı). */
+  if(!fetchedHourly){
+    /* sıcaklık gerçek veriden gelmiyor — rakım için hafif düzeltme */
+    if(elev>1300){ mod+=3; modReasons.push('Yüksek rakım ('+elev+' m) ve elle girilen sıcaklık: gece soğuması biraz daha sert olabilir.'); }
+    else if(elev>1050){ mod+=1.5; modReasons.push('Orta-yüksek rakım ('+elev+' m, tahmini sıcaklık).'); }
+  }
+  /* Gerçek veri varsa rakım zaten sıcaklıkta — ayrıca eklenmez. (Malatya\'da yüksek rakım
+     çiçeklenmeyi geciktirdiği için çoğu zaman koruyucudur; ham "yüksek=riskli" mantığı geçerli değil.) */
   /* Arazi tipi */
   var terr=el('terrain').value;
   if(terr==='valley'){ mod+=8; modReasons.push('Vadi tabanı / don cebi: soğuk hava birikimi (en güçlü topografik risk).'); }
@@ -1029,7 +1049,7 @@ function buildReport(r){
   var pl=prepLabel(r.prep,r.hasEquip);
   var L=[];
   L.push('══════════════════════════════════════════════════════');
-  L.push('  Malatya Kayısısı Zirai Don Karar Destek Sistemi v1.2');
+  L.push('  Malatya Kayısısı Zirai Don Karar Destek Sistemi v1.4');
   L.push('  Rapor tarihi: '+new Date().toLocaleString('tr-TR'));
   L.push('══════════════════════════════════════════════════════');
   L.push('Konum     : '+d.name+(el('localName').value?' / '+el('localName').value:''));
@@ -1101,7 +1121,7 @@ function bindInputs(){
       if(id==='lat'||id==='lon'){
         var lat=num('lat'),lon=num('lon'); selectedKey=nearestDistrict(lat,lon); el('district').value=selectedKey;
         if(map&&marker){marker.setLatLng([lat,lon]);} updateCoordChips();
-        if(isOnline) fetchElevation(lat,lon);
+        if(isOnline) scheduleWeatherRefresh();
       }
       if(id==='elev'){realElevation=null;el('elevTag').textContent='elle girildi';el('elevTag').className='tag';}
       /* Sıcaklık veya nem değişince çiy noktasını otomatik güncelle */
@@ -1126,8 +1146,15 @@ function init(){
   var mapOk=initMap();
   if(!mapOk && !isOnline) showFallback('Çevrimdışı — topografik harita yüklenemez.');
 
-  if(isOnline){ fetchElevation(d.lat,d.lon); setStatus('Sistem hazır. Haritada bahçeye dokun veya pin\'i sürükle — yaklaştıkça köy isimleri gelir.','ok'); }
-  else { showFallback('Çevrimdışısın.'); setStatus('Sistem hazır (çevrimdışı). Değerleri elle gir, "Analiz et"e bas.','ok'); }
+  if(isOnline){
+    setStatus('Sistem hazır. Seçili konum için hava verisi çekiliyor…','loading');
+    /* Açılışta seçili konum (Malatya Merkez) için hava verisini otomatik çek.
+       fetchWeather elevation'ı da getirir. Harita render olduktan sonra çağır. */
+    setTimeout(function(){ if(isOnline) fetchWeather(); }, 400);
+  } else {
+    showFallback('Çevrimdışısın.');
+    setStatus('Sistem hazır (çevrimdışı). Değerleri elle gir, "Analiz et"e bas.','ok');
+  }
 }
 window.onerror=function(msg,src,line){ setStatus('Sayfa hatası: '+msg+' (satır '+line+')','bad'); };
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
