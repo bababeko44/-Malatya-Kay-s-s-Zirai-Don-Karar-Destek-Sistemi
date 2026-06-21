@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Malatya Kayısısı Don KDS v1.0</title>
+<title>Malatya Kayısısı Don KDS v1.1</title>
 
 <!-- Leaflet CSS (topografik harita) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -151,6 +151,25 @@ summary:hover{color:var(--brand)}
 .diag b{color:#7a3d00}
 .diag code{background:#2b2015;color:#ffd98a;padding:2px 6px;border-radius:5px;font-size:11px}
 
+/* TEST SECTION — bottom of page, muted, clearly separated */
+.test-section{background:#f6f1e7;border:1px dashed #cbb892;opacity:.92}
+.test-section summary{color:#7a6a52;font-size:13.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.test-section details{background:transparent;border:0;padding:0}
+.test-section details[open] summary{margin-bottom:10px}
+.test-warn-label{font-size:11.5px;color:#a8743a;font-weight:600;font-style:italic}
+.test-body{border-top:1px dashed #d8c9a8;padding-top:10px}
+.test-note{font-size:12px;color:#6d543a;line-height:1.5;background:#fff6e4;border-left:3px solid #d59b00;border-radius:8px;padding:9px 11px;margin:0 0 10px}
+.test-note u{text-decoration-color:#d59b00}
+
+/* Risk badge: pattern + icon reinforcement for colorblind accessibility */
+.riskbox .icon-big{font-size:20px;margin-bottom:4px;line-height:1}
+
+/* Auto-filled field subtle highlight */
+input.auto-filled{background:#f4faf6}
+
+/* Primary action emphasis */
+.btns .primary{font-size:14px;padding:11px 18px}
+
 @media(max-width:860px){.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}.checks{grid-template-columns:1fr}.toprow{align-items:flex-start}.badges{display:none}.resultTop{grid-template-columns:1fr}.kv{grid-template-columns:1fr 1fr}.card{padding:12px}main{padding:9px 8px 24px}header{position:relative}.feed-grid{grid-template-columns:repeat(3,1fr)}#leafletMap,.map-fallback{height:340px}}
 @media(max-width:480px){.kv{grid-template-columns:1fr}.btns button{flex:1}.feed-grid{grid-template-columns:repeat(2,1fr)}#leafletMap,.map-fallback{height:300px}}
 </style>
@@ -162,7 +181,7 @@ summary:hover{color:var(--brand)}
       <div class="logo">🌸</div>
       <div>
         <h1>Malatya Kayısısı Zirai Don Karar Destek Sistemi</h1>
-        <p>v1.0 — Topografik harita · Zoom'lu köy/mahalle · Gerçek rakım · Canlı hava</p>
+        <p>v1.1 — Bilimsel eşikler · Topografik harita · Otomatik çiy noktası · Canlı hava</p>
       </div>
     </div>
     <div class="badges"><span class="badge" id="netBadge">Bağlantı denetleniyor…</span></div>
@@ -282,14 +301,11 @@ summary:hover{color:var(--brand)}
           <div class="field"><label for="wind">Rüzgâr hızı (m/s)</label><input id="wind" type="number" step="0.1" value="1.1"></div>
           <div class="field"><label for="humidity">Nem (%)</label><input id="humidity" type="number" step="1" value="82"></div>
           <div class="field"><label for="cloud">Bulutluluk (%)</label><input id="cloud" type="number" step="1" value="15"></div>
-          <div class="field"><label for="dew">Çiy noktası (°C) <span class="tag">hesaplanabilir</span></label><input id="dew" type="number" step="0.1" value="-3.2"></div>
+          <div class="field"><label for="dew">Çiy noktası (°C) <span class="tag" id="dewTag">otomatik</span></label><input id="dew" type="number" step="0.1" value="-3.2"></div>
         </div>
 
         <div class="btns">
           <button class="primary" type="button" onclick="analyze()">🔍 Analiz et</button>
-          <button type="button" onclick="calcDewPoint()">💧 Çiy noktası hesapla</button>
-          <button class="danger" type="button" onclick="demoSevere()">☠️ Ağır don demo</button>
-          <button class="good" type="button" onclick="demoSafe()">✅ Düşük risk demo</button>
         </div>
 
         <div class="chart-wrap" id="chartWrap" style="display:none">
@@ -297,7 +313,7 @@ summary:hover{color:var(--brand)}
           <canvas id="tempChart" height="140"></canvas>
         </div>
 
-        <div class="footnote">Harita: <b>OpenTopoMap</b> (OpenStreetMap + SRTM, CC-BY-SA). Hava: <b>Open-Meteo</b> (ECMWF/DWD ICON). MGM'in halka açık ücretsiz API'si yoktur. Resmi uyarı yerine geçmez.</div>
+        <div class="footnote">Zarar eşikleri: Malatya Kayısı Araştırma Enstitüsü ve WSU EB1240 verilerine dayanır. Harita: <b>OpenTopoMap</b> (OpenStreetMap + SRTM, CC-BY-SA). Hava: <b>Open-Meteo</b> (ECMWF/DWD ICON). MGM'in halka açık ücretsiz API'si yoktur. Resmi uyarı yerine geçmez.</div>
       </div>
 
       <div class="card" id="resultCard">
@@ -314,6 +330,20 @@ summary:hover{color:var(--brand)}
         </div>
       </div>
     </aside>
+  </div>
+
+  <!-- TEST MODLARI — en altta, ayrı, kapalı başlar -->
+  <div class="card test-section">
+    <details id="testDetails">
+      <summary>🧪 Test ve örnek senaryolar <span class="test-warn-label">(yalnızca deneme amaçlı)</span></summary>
+      <div class="test-body">
+        <p class="test-note">⚠️ <b>Dikkat:</b> Aşağıdakiler <u>gerçek tahmin değildir</u>. Uygulamanın nasıl çalıştığını görmek için hazırlanmış örnek senaryolardır. Bunlara basmak gerçek hava verisini siler ve uydurma değerler yükler. Gerçek analiz için yukarıdan "📡 Hava verisini çek" kullanın.</p>
+        <div class="btns">
+          <button class="danger" type="button" onclick="demoSevere()">☠️ Örnek: Ağır don gecesi</button>
+          <button class="good" type="button" onclick="demoSafe()">✅ Örnek: Düşük risk gecesi</button>
+        </div>
+      </div>
+    </details>
   </div>
 </main>
 
@@ -373,11 +403,18 @@ function estimateElevation(lat,lon,key){
 }
 
 function dewPointFromTRH(T,RH){ var a=17.625,b=243.04; var alpha=Math.log(RH/100)+(a*T)/(b+T); return (b*alpha)/(a-alpha); }
-window.calcDewPoint=function(){
+/* Çiy noktası otomatik: sıcaklık + nem girilince kendiliğinden hesaplanır */
+function autoDewPoint(){
   var t=num('minTemp'),rh=num('humidity');
-  if(!isFinite(t)||!isFinite(rh)||rh<=0){setStatus('Sıcaklık ve nem değerlerini gir.','bad');return;}
-  el('dew').value=fmt(dewPointFromTRH(t,rh),1); setStatus('Çiy noktası hesaplandı.','ok'); analyze();
-};
+  if(isFinite(t)&&isFinite(rh)&&rh>0&&rh<=100){
+    var dp=dewPointFromTRH(t,rh);
+    if(isFinite(dp)){
+      el('dew').value=fmt(dp,1);
+      el('dew').classList.add('auto-filled');
+      if(el('dewTag')){el('dewTag').textContent='otomatik';el('dewTag').className='tag live';}
+    }
+  }
+}
 
 /* ═══════════════ LEAFLET MAP ═══════════════ */
 function initMap(){
@@ -791,7 +828,18 @@ function drawChart(night,critT){
 
 /* ═══════════════ SCORING ═══════════════ */
 function stageInfo(stage){
-  var map={dormant:{name:'Kış uykusu / erken',critical:-8.0,sensitivity:4},bud:{name:'Tomurcuk kabarma',critical:-4.5,sensitivity:10},pink:{name:'Pembe tomurcuk',critical:-3.0,sensitivity:15},flower:{name:'Çiçeklenme',critical:-2.3,sensitivity:22},smallfruit:{name:'Çağla / küçük meyve',critical:-1.1,sensitivity:26},fruit:{name:'Meyve gelişimi',critical:-1.0,sensitivity:18}};
+  /* Kritik sıcaklıklar: Malatya Kayısı Araştırma Enstitüsü + WSU EB1240 verileri.
+     critical = zarar başlangıcı (°C), t10 = %10 kayıp, t90 = %90 kayıp.
+     sensitivity = göreceli hassasiyet puanı (yüksek = daha hassas).
+     Araştırma düzeltmesi: meyve gelişimi doku dayanıklılığı çağlaya yakın → 18'den 22'ye. */
+  var map={
+    dormant:   {name:'Kış uykusu / erken',  critical:-8.0, t10:-9.4, t90:-16.0, sensitivity:4},
+    bud:       {name:'Tomurcuk kabarma',     critical:-4.5, t10:-6.7, t90:-17.8, sensitivity:10},
+    pink:      {name:'Pembe tomurcuk',        critical:-3.0, t10:-4.4, t90:-10.0, sensitivity:15},
+    flower:    {name:'Çiçeklenme',            critical:-2.3, t10:-3.3, t90:-6.4,  sensitivity:22},
+    smallfruit:{name:'Çağla / küçük meyve',  critical:-1.1, t10:-2.3, t90:-3.3,  sensitivity:26},
+    fruit:     {name:'Meyve gelişimi',        critical:-1.0, t10:-2.2, t90:-3.9,  sensitivity:23}
+  };
   return map[stage]||map.flower;
 }
 function calc(){
@@ -799,19 +847,43 @@ function calc(){
   var t=num('minTemp'),dur=Math.max(0,num('duration')),wind=Math.max(0,num('wind'));
   var hum=clamp(num('humidity'),0,100),cloud=clamp(num('cloud'),0,100),dew=num('dew'),elev=num('elev');
   var score=0,reasons=[],advice=[],cautions=[];
+  /* Sıcaklık skoru: araştırmanın T10/T90 eğrisine göre.
+     t > critical: zarar yok. critical→t10: hafif. t10→t90: dik artış (asıl tehlike). t < t90: maksimum.
+     Çağlada t10=-2.3, t90=-3.3 — sadece 1°C'de %10→%90, bu yüzden eğri dik. */
   var gap=st.critical-t;
-  if(gap>0){ score+=28+Math.min(28,gap*11); reasons.push('Beklenen min. sıcaklık '+fmt(t,1)+'°C, kritik eşik '+fmt(st.critical,1)+'°C — '+fmt(gap,1)+'°C altında.'); }
-  else if(t<=st.critical+1.5){ score+=13; reasons.push('Sıcaklık kritik eşiğe çok yakın ('+fmt(t,1)+'°C).'); }
-  else reasons.push('Sıcaklık ('+fmt(t,1)+'°C) kritik eşiğin üzerinde görünüyor.');
+  if(t>st.critical){
+    if(t<=st.critical+1.5){ score+=10; reasons.push('Sıcaklık ('+fmt(t,1)+'°C) kritik eşiğe ('+fmt(st.critical,1)+'°C) çok yakın; küçük tahmin hatası bile zarar doğurabilir.'); }
+    else reasons.push('Sıcaklık ('+fmt(t,1)+'°C) kritik eşiğin ('+fmt(st.critical,1)+'°C) üzerinde görünüyor.');
+  } else if(t>st.t10){
+    /* critical ile t10 arası: %0–10 kayıp bölgesi */
+    var f1=(st.critical-t)/Math.max(0.1,st.critical-st.t10);
+    score+=20+f1*14;
+    reasons.push('Min. sıcaklık '+fmt(t,1)+'°C — zarar eşiği ('+fmt(st.critical,1)+'°C) altında, ~%10 kayıp bölgesine ('+fmt(st.t10,1)+'°C) yaklaşıyor.');
+  } else if(t>st.t90){
+    /* t10 ile t90 arası: kayıp %10'dan %90'a fırlar — en kritik bölge */
+    var f2=(st.t10-t)/Math.max(0.1,st.t10-st.t90);
+    score+=34+f2*22;
+    reasons.push('Min. sıcaklık '+fmt(t,1)+'°C — %10 ('+fmt(st.t10,1)+'°C) ve %90 ('+fmt(st.t90,1)+'°C) kayıp eşikleri arasında; kayıp hızla artıyor.');
+  } else {
+    /* t90 altı: yaygın/tam kayıp */
+    score+=56; reasons.push('Min. sıcaklık '+fmt(t,1)+'°C — %90 kayıp eşiğinin ('+fmt(st.t90,1)+'°C) altında; yaygın hasar beklenir.');
+  }
   score+=Math.min(24,dur*5.0); if(dur>0) reasons.push('Kritik altı tahmini süre '+fmt(dur,1)+' saat.');
   score+=st.sensitivity; reasons.push('Fenolojik evre hassasiyeti: '+st.name+' ('+st.sensitivity+' puan).');
-  if(isFinite(dew)){ var dg=dew-t;
-    if(dg>=-1.5){ score+=8; reasons.push('Çiy noktası ('+fmt(dew,1)+'°C) hava sıcaklığına çok yakın: buz kristali riski.'); }
-    else if(dg>=-4){ score+=4; reasons.push('Çiy noktası orta düzeyde yakın.'); } }
-  if(wind>=4){ score+=5; reasons.push('Yüksek rüzgâr ('+fmt(wind,1)+' m/s): adveksiyon donu olabilir.'); }
+  /* Çiy noktası etkisi (araştırma): Çiy noktası sıcaklığa yakınsa, yoğuşma gizli ısısı
+     gece soğumasını yavaşlatır → KORUYUCU. Çiy noktası çok düşükse sıcaklık hızla/derine
+     düşer → RİSKLİ. Ayrıca çiy ≈ hava ise buz kristali çekirdeklenmesi riski. */
+  if(isFinite(dew)){ var dg=t-dew;  /* hava ile çiy noktası farkı */
+    if(dg<=1.5){ score+=6; reasons.push('Çiy noktası ('+fmt(dew,1)+'°C) hava sıcaklığına çok yakın: yoğuşma sıcaklığı yavaşça düşürür ama buz çekirdeklenmesi riski artar.'); }
+    else if(dg>=5){ score+=8; reasons.push('Çiy noktası ('+fmt(dew,1)+'°C) hava sıcaklığından çok düşük: sıcaklık hızla ve derine düşebilir, gece soğuması sert olur.'); }
+    else if(dg>=3){ score+=4; reasons.push('Çiy noktası ('+fmt(dew,1)+'°C) orta düzeyde düşük; soğuma hızlanabilir.'); }
+  }
+  /* Rüzgâr (araştırma): >~4 m/s adveksiyon donu işareti, koruma yöntemleri etkisizleşir.
+     Radyasyon donunda çok hafif rüzgâr (~2 m/s) sıcak havayı karıştırıp koruyucu olabilir. */
+  if(wind>=4){ score+=5; reasons.push('Rüzgâr yüksek ('+fmt(wind,1)+' m/s): adveksiyon donu olabilir; fan/ısıtıcı/yağmurlama etkinliği düşer.'); }
   if(cloud>70){ score-=8; reasons.push('Yüksek bulutluluk radyatif soğumayı zayıflatır.'); }
-  else if(cloud<20&&wind<2.5){ score+=4; reasons.push('Az bulut + düşük rüzgâr: açık gece radyasyon donu koşulu.'); }
-  if(hum>78&&cloud<35&&wind<2.5){ score+=6; reasons.push('Yüksek nem + düşük bulut + düşük rüzgâr: tipik radyasyon donu.'); }
+  else if(cloud<20&&wind<2.0){ score+=4; reasons.push('Az bulut + durgun hava: açık gece radyasyon donu koşulu.'); }
+  if(hum>78&&cloud<35&&wind<2.0){ score+=6; reasons.push('Yüksek nem + düşük bulut + durgun hava: tipik radyasyon donu.'); }
   var terr=el('terrain').value;
   if(terr==='valley'){score+=12;reasons.push('Vadi tabanı / don cebi: soğuk hava birikimi.');}
   else if(terr==='slope'){score-=4;reasons.push('Yamaç soğuk hava birikimini azaltabilir.');}
@@ -823,13 +895,15 @@ function calc(){
   if(checked('cDrySoil')){score+=6;reasons.push('Kuru toprak gece hızlı soğur.');}
   if(checked('cWeakTrees')){score+=7;reasons.push('Zayıf/genç ağaçlarda hasar eşiği düşük.');}
   var freezeType='Karma / belirsiz';
-  if(t<=st.critical&&wind<2.5&&cloud<45) freezeType='Radyasyon donu (çok olası)';
+  if(t<=st.critical&&wind<2.0&&cloud<45) freezeType='Radyasyon donu (çok olası)';
   else if(t<=st.critical&&wind>=4) freezeType='Adveksiyon / rüzgârlı don';
   else if(t>st.critical+1) freezeType='Don riski zayıf';
+  /* Koruma kapasitesi. Adveksiyon (rüzgârlı) donda tüm aktif yöntemler zayıflar (araştırma). */
+  var advection = freezeType.indexOf('Adveksiyon')>=0;
   var protection=0;
-  if(checked('eqSprinkler'))protection+=28;
-  if(checked('eqFan'))protection+=(freezeType.indexOf('Radyasyon')>=0)?18:6;
-  if(checked('eqHeater'))protection+=15; if(checked('eqDrip'))protection+=6;
+  if(checked('eqSprinkler'))protection+=advection?16:28;
+  if(checked('eqFan'))protection+=(freezeType.indexOf('Radyasyon')>=0)?18:(advection?2:6);
+  if(checked('eqHeater'))protection+=advection?7:15; if(checked('eqDrip'))protection+=6;
   if(checked('eqLabor'))protection+=6; if(checked('eqGenerator'))protection+=5;
   var gross=clamp(Math.round(score),0,100);
   var protEffect=Math.min(protection*0.55,gross*0.65);
@@ -843,7 +917,8 @@ function calc(){
   } else advice.push(['📡 Takip önerisi','Kritik eşik altında değil. Yine de uyarıları ve termometreyi takip et.']);
   if(checked('cInsured')) advice.push(['📋 TARSİM','Hasar için fotoğraf, tarih-saat, koordinat notlarını tut.']);
   if(freezeType.indexOf('Radyasyon')>=0&&!checked('eqLabor')) cautions.push('Gece iş gücü yoksa müdahale zamanında başlatılamayabilir.');
-  if(gap>3&&!checked('eqSprinkler')) cautions.push('Kritik eşik '+fmt(gap,1)+'°C altında ama yağmurlama yok.');
+  if(advection&&(checked('eqFan')||checked('eqHeater')||checked('eqSprinkler'))) cautions.push('Rüzgârlı (adveksiyon) don görünüyor: fan, ısıtıcı ve yağmurlamanın etkisi belirgin biçimde azalır; soğuk hava kütlesi sürekli yenilenir.');
+  if(gap>3&&!checked('eqSprinkler')) cautions.push('Sıcaklık zarar eşiğinin '+fmt(gap,1)+'°C altında ama yağmurlama yok; en etkili aktif koruma yöntemidir.');
   return {stage:st,temp:t,dur:dur,wind:wind,hum:hum,cloud:cloud,dew:dew,elev:elev,freezeType:freezeType,gross:gross,net:net,protection:Math.round(protection),protectionEffect:Math.round(protEffect),reasons:reasons,advice:advice,cautions:cautions};
 }
 function riskLabel(s){ if(s>=76)return['ÇOK YÜKSEK','risk-red','☠️']; if(s>=56)return['YÜKSEK','risk-orange','⚠️']; if(s>=31)return['ORTA','risk-yellow','🔶']; return['DÜŞÜK','risk-green','✅']; }
@@ -865,7 +940,7 @@ window.analyze=function(){
   try{
     var r=calc(); lastAnalysis=r; var lab=riskLabel(r.net);
     var simple=r.net>=76?'Bu gece ciddi don zararı riski var. Riskli saatlerden önce aktif tedbirler başlatılmalı.':r.net>=56?'Don riski yüksek. Bahçe ve ekipman durumuna göre tedbir planı yap.':r.net>=31?'Orta düzeyde risk var. Gece takibi ve yerel termometre önerilir.':'Risk düşük görünüyor. Uyarıları ve termometreyi yine de takip et.';
-    var html='<div class="resultTop"><div class="riskbox '+lab[1]+'"><div class="n">'+r.net+'</div><div class="t">'+lab[0]+'</div><div class="sub">net risk puanı</div></div><div class="summary"><div class="big">'+lab[2]+' '+simple+'</div><div class="bar"><span style="width:'+r.net+'%"></span></div><div class="kv"><div><b>Don tipi</b>'+r.freezeType+'</div><div><b>Kritik eşik</b>'+fmt(r.stage.critical,1)+'°C</div><div><b>Tahmini min.</b>'+fmt(r.temp,1)+'°C</div><div><b>Kritik süre</b>'+fmt(r.dur,1)+' saat</div><div><b>Çiy noktası</b>'+fmt(r.dew,1)+'°C</div><div><b>Rakım</b>'+fmt(r.elev,0)+' m'+(realElevation!=null?' ✓':'')+'</div></div></div></div>';
+    var html='<div class="resultTop"><div class="riskbox '+lab[1]+'"><div class="icon-big">'+lab[2]+'</div><div class="n">'+r.net+'</div><div class="t">'+lab[0]+'</div><div class="sub">net risk puanı</div></div><div class="summary"><div class="big">'+lab[2]+' '+simple+'</div><div class="bar"><span style="width:'+r.net+'%"></span></div><div class="kv"><div><b>Don tipi</b>'+r.freezeType+'</div><div><b>Zarar eşiği</b>'+fmt(r.stage.critical,1)+'°C</div><div><b>Tahmini min.</b>'+fmt(r.temp,1)+'°C</div><div><b>Kritik süre</b>'+fmt(r.dur,1)+' saat</div><div><b>Çiy noktası</b>'+fmt(r.dew,1)+'°C</div><div><b>Rakım</b>'+fmt(r.elev,0)+' m'+(realElevation!=null?' ✓':'')+'</div></div></div></div>';
     html+='<div class="section"><h3>Önerilen tedbirler</h3>';
     r.advice.forEach(function(a){html+='<div class="advice"><strong>'+a[0]+'</strong>'+a[1]+'</div>';});
     if(r.cautions.length){ html+='<h3>⚠️ Dikkat</h3>'; r.cautions.forEach(function(c){html+='<div class="caution-item">'+c+'</div>';}); }
@@ -882,7 +957,7 @@ function buildReport(r){
   var d=DISTRICTS[selectedKey]||DISTRICTS.merkez,lab=riskLabel(r.net)[0];
   var L=[];
   L.push('══════════════════════════════════════════════════════');
-  L.push('  Malatya Kayısısı Zirai Don Karar Destek Sistemi v1.0');
+  L.push('  Malatya Kayısısı Zirai Don Karar Destek Sistemi v1.1');
   L.push('  Rapor tarihi: '+new Date().toLocaleString('tr-TR'));
   L.push('══════════════════════════════════════════════════════');
   L.push('Konum     : '+d.name+(el('localName').value?' / '+el('localName').value:''));
@@ -891,7 +966,7 @@ function buildReport(r){
   L.push('Çeşit     : '+el('variety').value);
   L.push('Evre      : '+r.stage.name);
   L.push('──────────────────────────────────────────────────────');
-  L.push('Min. sıcaklık : '+fmt(r.temp,1)+'°C   Kritik eşik: '+fmt(r.stage.critical,1)+'°C');
+  L.push('Min. sıcaklık : '+fmt(r.temp,1)+'°C   Zarar eşiği: '+fmt(r.stage.critical,1)+'°C');
   L.push('Kritik süre   : '+fmt(r.dur,1)+' saat   Rüzgâr: '+fmt(r.wind,1)+' m/s');
   L.push('Nem           : '+fmt(r.hum,0)+'%   Bulut: '+fmt(r.cloud,0)+'%   Çiy: '+fmt(r.dew,1)+'°C');
   L.push('Don tipi      : '+r.freezeType);
@@ -914,7 +989,7 @@ window.demoSevere=function(){
   ['cFrostPocket','cDrySoil'].forEach(function(i){el(i).checked=true;});
   ['cWeakTrees','cInsured'].forEach(function(i){el(i).checked=false;});
   fetchedHourly=null; el('feedBox').style.display='none'; el('chartWrap').style.display='none';
-  analyze(); setStatus('Demo: Ağır don senaryosu.','bad');
+  analyze(); setStatus('🧪 TEST senaryosu yüklendi (ağır don) — bu gerçek tahmin değildir.','bad');
 };
 window.demoSafe=function(){
   el('stage').value='flower'; el('minTemp').value='3.9'; el('duration').value='0';
@@ -923,7 +998,7 @@ window.demoSafe=function(){
   ['eqSprinkler','eqFan','eqHeater','eqDrip','eqLabor','eqGenerator'].forEach(function(i){el(i).checked=false;});
   ['cFrostPocket','cDrySoil','cWeakTrees','cInsured'].forEach(function(i){el(i).checked=false;});
   fetchedHourly=null; el('feedBox').style.display='none'; el('chartWrap').style.display='none';
-  analyze(); setStatus('Demo: Düşük risk senaryosu.','ok');
+  analyze(); setStatus('🧪 TEST senaryosu yüklendi (düşük risk) — bu gerçek tahmin değildir.','ok');
 };
 
 window.copyReport=function(){
@@ -956,6 +1031,10 @@ function bindInputs(){
         if(isOnline) fetchElevation(lat,lon);
       }
       if(id==='elev'){realElevation=null;el('elevTag').textContent='elle girildi';el('elevTag').className='tag';}
+      /* Sıcaklık veya nem değişince çiy noktasını otomatik güncelle */
+      if(id==='minTemp'||id==='humidity'){ autoDewPoint(); }
+      /* Kullanıcı çiy noktasını elle değiştirirse otomatik etiketini kaldır */
+      if(id==='dew'){ el('dew').classList.remove('auto-filled'); if(el('dewTag')){el('dewTag').textContent='elle girildi';el('dewTag').className='tag';} }
       analyze();
     });
   });
@@ -968,7 +1047,7 @@ function init(){
   var d=DISTRICTS[selectedKey];
   el('district').value=selectedKey; el('terrain').value=d.terrain;
   el('lat').value=fmt(d.lat,6); el('lon').value=fmt(d.lon,6); el('elev').value=d.elev;
-  updateCoordChips(); bindInputs(); analyze();
+  updateCoordChips(); bindInputs(); autoDewPoint(); analyze();
 
   /* Init map (with fallback) */
   var mapOk=initMap();
