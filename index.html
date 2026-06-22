@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Malatya Kayısısı Don KDS v1.6</title>
+<title>Malatya Kayısısı Don KDS v1.7</title>
 
 <!-- Leaflet CSS (topografik harita) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -202,6 +202,7 @@ input.auto-filled{background:#f4faf6}
 /* Boş durum (kademeli açma) — yönlendirici yüzey */
 .empty-state{text-align:center;padding:26px 18px;display:flex;flex-direction:column;align-items:center;gap:10px}
 .empty-icon{font-size:46px;line-height:1}
+.empty-icon.loading-spin{display:inline-block;animation:spin360 1s linear infinite}
 .empty-title{font-size:17px;font-weight:800;color:#7a3d00}
 .empty-text{font-size:14px;color:#6b5c4a;line-height:1.55;max-width:380px}
 
@@ -253,7 +254,7 @@ input.auto-filled{background:#f4faf6}
       <div class="logo">🌸</div>
       <div>
         <h1>Malatya Kayısısı Zirai Don Karar Destek Sistemi</h1>
-        <p>v1.6 — Önce konum seç · Adres arama · Yer isimli harita · Yaşlı dostu</p>
+        <p>v1.7 — Akıcı sonuç · Net hazırlık · Önce konum seç · Yaşlı dostu</p>
       </div>
     </div>
     <div class="badges"><span class="badge" id="netBadge">Bağlantı denetleniyor…</span></div>
@@ -700,9 +701,25 @@ function handleNewLocation(lat,lon,fromMap,forceKey){
   el('feedBox').style.display='none';
   el('chartWrap').style.display='none';
 
-  analyze();
-  /* Konum seçilince/değişince hava verisini otomatik çek (debounce). */
-  if(isOnline) scheduleWeatherRefresh();
+  if(isOnline){
+    /* Çevrimiçi: önce hava verisini bekle, sonra hesapla.
+       Eski/varsayılan değerlerle yanlış (turuncu) risk göstermemek için
+       hava gelene kadar "hesaplanıyor" durumu gösterilir. */
+    showCalculating();
+    scheduleWeatherRefresh();
+  } else {
+    /* Çevrimdışı: elle girilen değerlerle hemen hesapla. */
+    analyze();
+  }
+}
+
+/* Konum seçildi ama hava verisi henüz gelmedi — geçici yükleniyor durumu */
+function showCalculating(){
+  el('result').innerHTML='<div class="empty-state">'+
+    '<div class="empty-icon loading-spin">🔄</div>'+
+    '<div class="empty-title">Bu gecenin verileri alınıyor…</div>'+
+    '<div class="empty-text">Seçtiğiniz konum için hava tahmini indiriliyor ve don riski hesaplanıyor. Lütfen birkaç saniye bekleyin.</div>'+
+    '</div>';
 }
 
 /* Debounce: pin sürüklerken veya hızlı tıklarken tek çağrı yapılsın */
@@ -842,6 +859,9 @@ window.fetchWeather=function(){
       showDiag('other', err.message);
       setStatus('Hava verisi hatası: '+err.message,'bad');
     }
+    /* Hava verisi gelmedi: "hesaplanıyor" ekranında takılı kalmamak için
+       elle girilen/varsayılan değerlerle hesapla. */
+    if(locationSelected) analyze();
   });
 };
 
@@ -1010,8 +1030,8 @@ function calc(){
   }
   reasons.push('Fenolojik evre: '+st.name+' (zarar eşiği '+fmt(st.critical,1)+'°C).');
 
-  /* ── tehlike-ölçeği: modifiye edici faktörler yalnızca gerçek don tehlikesi varsa devreye girer ──
-     Sıcaklık eşiğin 2.5°C üstündeyse ölçek 0 (faktörler etkisiz); eşik altında 1 (tam etki). */
+  /* ── tehlike-ölçeği: modifiye edici etkenler yalnızca gerçek don tehlikesi varsa devreye girer ──
+     Sıcaklık eşiğin 2.5°C üstündeyse ölçek 0 (etkenler etkisiz); eşik altında 1 (tam etki). */
   var dangerScale;
   if(t>st.critical+2.5) dangerScale=0;
   else if(t>st.critical) dangerScale=(st.critical+2.5-t)/2.5;
@@ -1055,13 +1075,13 @@ function calc(){
 
   var effectiveMod = mod * dangerScale;
   if(dangerScale>0 && modReasons.length){
-    if(dangerScale<1) reasons.push('(Aşağıdaki faktörler don tehlikesiyle orantılı olarak hesaba katıldı — sıcaklık eşiğe yaklaştıkça etkileri artar.)');
+    if(dangerScale<1) reasons.push('(Aşağıdaki etkenler don tehlikesiyle orantılı olarak hesaba katıldı — sıcaklık eşiğe yaklaştıkça etkileri artar.)');
     modReasons.forEach(function(m){reasons.push(m);});
   } else if(mod>0 && dangerScale===0){
-    reasons.push('Vadi/don cebi/arazi gibi faktörler mevcut ama sıcaklık güvenli olduğundan risk skoruna eklenmedi (don tehlikesi yok).');
+    reasons.push('Vadi/don cebi/arazi gibi etkenler mevcut ama sıcaklık güvenli olduğundan risk skoruna eklenmedi (don tehlikesi yok).');
   }
 
-  /* ── RİSK SKORU (yalnızca tehlike + tehlikeyle-orantılı faktörler) ── */
+  /* ── RİSK SKORU (yalnızca tehlike + tehlikeyle-orantılı etkenler) ── */
   var risk=clamp(Math.round(hazard+effectiveMod),0,100);
 
   /* ── DON TİPİ ── */
@@ -1087,16 +1107,16 @@ function calc(){
 
   /* ── TAVSİYELER ── */
   if(t<=st.critical){
-    if(checked('eqSprinkler')) advice.push(['💧 Yağmurlama sulama','Sıcaklık 0°C\'ye yaklaşmadan başlat; don çözülüp güvenli seviyeye çıkana kadar kesme. Kesinti zararı artırır.']);
+    if(checked('eqSprinkler')) advice.push(['💧 Yağmurlama sulama','Sıcaklık 0°C\'ye yaklaşmadan sulamayı başlatın; don çözülüp güvenli seviyeye çıkana kadar kesmeyin. Sulamanın ortada kesilmesi zararı artırır.']);
     if(checked('eqFan')){ if(radiation) advice.push(['🌀 Fan / rüzgâr makinesi','Radyasyon donunda sıcaklık enverziyonu (üstte sıcak, altta soğuk hava) varsa fan üstteki ılık havayı aşağı karıştırır. Sıcaklığı izleyerek çalıştırın.']); else cautions.push('Adveksiyon (rüzgârlı) donda fan tek başına yetersizdir; sürekli gelen soğuk hava kütlesini ısıtamaz.'); }
-    if(checked('eqHeater')) advice.push(['🔥 Soba / ısıtıcı','Riskli saatten önce hazırlık; yakıt, güvenlik mesafesi, iş gücü planı.']);
-    if(checked('eqDrip')) advice.push(['🚿 Damla sulama','Gündüzden toprak nemi artırılırsa gece ısı kapasitesi yükselir. Tek başına aktif koruma değil.']);
-    if(!hasEquip) advice.push(['⚠️ Aktif ekipman yok','MGM uyarılarını takip et; gece sıcaklık ölç, sabah hasarı belgele, TARSİM belgelerini hazırla.']);
-  } else advice.push(['📡 Takip önerisi','Şu an zarar eşiği altında görünmüyor. Yine de MGM uyarıları ve termometreyle gece takibi önerilir.']);
-  if(checked('cInsured')) advice.push(['📋 TARSİM / hasar belgesi','Hasar için fotoğraf, tarih-saat ve koordinat notlarını düzenli tut; hasattan önce bildir.']);
-  if(radiation&&!checked('eqLabor')) cautions.push('Gece iş gücü yoksa aktif müdahale zamanında başlatılamayabilir.');
-  if(advection&&hasEquip) cautions.push('Rüzgârlı (adveksiyon) don görünüyor: fan, ısıtıcı ve yağmurlamanın etkisi belirgin azalır; soğuk hava kütlesi sürekli yenilenir.');
-  if(t<=st.critical && (st.critical-t)>1.5 && !checked('eqSprinkler')) cautions.push('Sıcaklık zarar eşiğinin altında ama yağmurlama yok; en etkili aktif koruma yöntemidir.');
+    if(checked('eqHeater')) advice.push(['🔥 Soba / ısıtıcı','Riskli saatten önce hazırlığınızı yapın: yakıt, güvenlik mesafesi ve iş gücü planı. Birkaç küçük ısı kaynağı, tek büyük kaynaktan daha etkilidir.']);
+    if(checked('eqDrip')) advice.push(['🚿 Damla sulama','Gündüzden toprak nemini artırırsanız toprak gece daha çok ısı tutar. Tek başına aktif don koruması değildir; destekleyici yöntemdir.']);
+    if(!hasEquip) advice.push(['⚠️ Aktif ekipman yok','MGM uyarılarını takip edin; gece sıcaklığı ölçün, sabah hasarı belgeleyin ve TARSİM evraklarınızı hazır tutun.']);
+  } else advice.push(['📡 Takip önerisi','Sıcaklık şu an zarar eşiğinin altında görünmüyor. Yine de MGM uyarılarını ve termometreyi izleyerek geceyi takip edin.']);
+  if(checked('cInsured')) advice.push(['📋 TARSİM / hasar belgesi','Hasar durumunda fotoğraf, tarih-saat ve konum notlarını düzenli tutun; hasarı en kısa sürede TARSİM\'e bildirin.']);
+  if(radiation&&!checked('eqLabor')) cautions.push('Gece iş gücü ya da nöbet yoksa aktif müdahale zamanında başlatılamayabilir.');
+  if(advection&&hasEquip) cautions.push('Rüzgârlı (adveksiyon) don görünüyor: fan, ısıtıcı ve yağmurlamanın etkisi belirgin biçimde azalır; soğuk hava kütlesi sürekli yenilendiği için koruma zorlaşır.');
+  if(t<=st.critical && (st.critical-t)>1.5 && !checked('eqSprinkler')) cautions.push('Sıcaklık zarar eşiğinin altında ama yağmurlama sulamanız yok; bu, don zararını azaltan en etkili aktif yöntemlerden biridir.');
 
   return {stage:st,temp:t,dur:dur,wind:wind,hum:hum,cloud:cloud,dew:dew,elev:elev,
     freezeType:freezeType,hazard:Math.round(hazard),risk:risk,
@@ -1118,11 +1138,14 @@ function buildTimeline(night,critT){
   return rows?'<div class="section"><h3>🕐 Bu gece saatlik tablo</h3><div class="timeline">'+rows+'</div></div>':'';
 }
 
+/* Hazırlık seviyesi: ekipmanın bu don tipine karşı GERÇEK koruma gücüne göre
+   4 anlamlı kategori. Yüzde yerine kategori çünkü çiftçi için "58/100" anlamsız.
+   prep ham puanı yalnızca kategori belirlemek için kullanılır, ekrana yansıtılmaz. */
 function prepLabel(p,hasEquip){
-  if(!hasEquip) return ['Ekipman yok','prep-none'];
-  if(p>=70) return ['Çok iyi','prep-high'];
-  if(p>=45) return ['İyi','prep-mid'];
-  if(p>=20) return ['Kısmi','prep-low'];
+  if(!hasEquip) return ['Hazırlık yok','prep-none'];
+  if(p>=45) return ['Güçlü','prep-high'];
+  if(p>=28) return ['İyi','prep-mid'];
+  if(p>=14) return ['Orta','prep-low'];
   return ['Sınırlı','prep-low'];
 }
 
@@ -1131,19 +1154,24 @@ window.analyze=function(){
   if(!locationSelected){ showEmptyStates(); return; }
   try{
     var r=calc(); lastAnalysis=r; var lab=riskLabel(r.risk);
-    var simple=r.risk>=76?'Bu gece ciddi don zararı riski var. Riskli saatlerden önce aktif tedbirler başlatılmalı.':r.risk>=56?'Don riski yüksek. Tedbir planını gözden geçir.':r.risk>=31?'Orta düzeyde don riski var. Gece takibi ve yerel termometre önerilir.':'Don riski düşük görünüyor. Uyarıları ve termometreyi yine de takip et.';
+    var simple=r.risk>=76?'Bu gece ciddi don zararı riski var. Riskli saatlerden önce aktif tedbirleri başlatın.':r.risk>=56?'Don riski yüksek. Tedbir planınızı gözden geçirin.':r.risk>=31?'Orta düzeyde don riski var. Geceyi takip edin ve bahçenizdeki termometreyi izleyin.':'Don riski düşük görünüyor. Yine de MGM uyarılarını ve termometreyi takip edin.';
     var pl=prepLabel(r.prep,r.hasEquip);
 
     var html='<div class="resultTop"><div class="riskbox '+lab[1]+'"><div class="icon-big">'+lab[2]+'</div><div class="n">'+r.risk+'</div><div class="t">'+lab[0]+'</div><div class="sub">don risk puanı</div></div><div class="summary"><div class="big">'+lab[2]+' '+simple+'</div><div class="bar"><span style="width:'+r.risk+'%"></span></div><div class="kv"><div><b>Don tipi</b>'+r.freezeType+'</div><div><b>Zarar eşiği</b>'+fmt(r.stage.critical,1)+'°C</div><div><b>Tahmini min.</b>'+fmt(r.temp,1)+'°C</div><div><b>Kritik süre</b>'+fmt(r.dur,1)+' saat</div><div><b>Çiy noktası</b>'+fmt(r.dew,1)+'°C</div><div><b>Rakım</b>'+fmt(r.elev,0)+' m'+(realElevation!=null?' ✓':'')+'</div></div></div></div>';
 
-    /* Hazırlık göstergesi — riskten AYRI. Yalnızca don tehlikesi varken anlamlı vurgu. */
-    if(r.hasEquip || r.risk>=31){
-      var prepNote = !r.hasEquip ? 'Aktif don mücadele ekipmanı seçilmedi. Risk yüksekse seçenekleri değerlendir.'
-        : (r.risk<31 ? 'Bu gece don tehlikesi düşük; ekipmana muhtemelen gerek olmayacak.'
-        : 'Bu hazırlık don zararını <u>azaltabilir</u> ama don tehlikesini (yukarıdaki risk) değiştirmez.');
-      html+='<div class="prep-box '+pl[1]+'"><div class="prep-head"><span>🛡️ Don mücadele hazırlığın</span><span class="prep-badge">'+pl[0]+(r.hasEquip?' · '+r.prep+'/100':'')+'</span></div>';
-      if(r.hasEquip){ html+='<div class="prep-bar"><span style="width:'+r.prep+'%"></span></div>'; }
-      html+='<div class="prep-note">'+prepNote+'</div></div>';
+    /* Hazırlık göstergesi — riskten AYRI ve yalnızca gerçek don tehlikesi varken (risk≥31) gösterilir.
+       Düşük riskte ekipman durumu gereksiz; çiftçiyi yormaz. Yüzde değil, kategori gösterilir. */
+    if(r.risk>=31){
+      if(r.hasEquip){
+        var protNote = r.advection
+          ? 'Bu gece rüzgârlı (adveksiyon) don görünüyor; ekipmanın etkisi sınırlı olabilir. Hazırlığınız don <u>zararını</u> azaltabilir ama don tehlikesini (yukarıdaki risk puanı) değiştirmez.'
+          : 'Hazırlığınız don <u>zararını</u> azaltabilir ama don tehlikesini (yukarıdaki risk puanı) değiştirmez. Tedbirleri sıcaklık eşiğe yaklaşınca uygulayın.';
+        html+='<div class="prep-box '+pl[1]+'"><div class="prep-head"><span>🛡️ Don mücadele hazırlığınız</span><span class="prep-badge">'+pl[0]+'</span></div>'+
+          '<div class="prep-note">'+protNote+'</div></div>';
+      } else {
+        html+='<div class="prep-box prep-none"><div class="prep-head"><span>🛡️ Don mücadele hazırlığınız</span><span class="prep-badge">Hazırlık yok</span></div>'+
+          '<div class="prep-note">Aktif don mücadele ekipmanı seçmediniz. Don riski yüksek olduğunda yağmurlama, fan veya ısıtıcı gibi yöntemler zararı azaltabilir; "Don mücadele imkânlarınız" bölümünden işaretleyebilirsiniz.</div></div>';
+      }
     }
 
     html+='<div class="section"><h3>Önerilen tedbirler</h3>';
@@ -1154,7 +1182,7 @@ window.analyze=function(){
     html+='<details class="why-details" open><summary>📋 Bu sonuç neden çıktı?</summary><div class="why-body"><ul class="why-list">';
     r.reasons.forEach(function(x){html+='<li>'+x+'</li>';}); html+='</ul></div></details>';
 
-    html+='<details class="tech-details"><summary>🔢 Teknik puanlama detayı</summary><div class="why-body"><div class="kv"><div><b>Temel tehlike</b>'+r.hazard+' / 100</div><div><b>Don risk puanı</b>'+r.risk+' / 100</div><div><b>Hazırlık</b>'+(r.hasEquip?r.prep+' / 100':'—')+'</div><div><b>Don tipi</b>'+r.freezeType+'</div><div><b>Rüzgâr</b>'+fmt(r.wind,1)+' m/s</div><div><b>Nem</b>'+fmt(r.hum,0)+'%</div></div><p class="tech-note">Risk = don tehlikesi (sıcaklık + fenolojik evre + tehlikeyle orantılı arazi/bahçe faktörleri). Hazırlık ayrı gösterilir; ekipman riski düşürmez, gerçekleşecek hasarı azaltır.</p></div></details>';
+    html+='<details class="tech-details"><summary>🔢 Teknik puanlama detayı</summary><div class="why-body"><div class="kv"><div><b>Temel tehlike</b>'+r.hazard+' / 100</div><div><b>Don risk puanı</b>'+r.risk+' / 100</div><div><b>Hazırlık</b>'+pl[0]+'</div><div><b>Don tipi</b>'+r.freezeType+'</div><div><b>Rüzgâr</b>'+fmt(r.wind,1)+' m/s</div><div><b>Nem</b>'+fmt(r.hum,0)+'%</div></div><p class="tech-note">Risk = don tehlikesi (sıcaklık + fenolojik evre + tehlikeyle orantılı arazi/bahçe etkenleri). Hazırlık ayrı gösterilir; ekipman riski düşürmez, oluşacak zararı azaltır.</p></div></details>';
     el('result').innerHTML=html;
     /* Rapor yalnızca çiftçi "Rapor hazırla" dediyse güncellenir; aksi halde boş kalır. */
     if(reportGenerated) buildReport(r);
@@ -1184,7 +1212,7 @@ function buildReport(r){
   L.push('▌ SONUÇ');
   L.push('  Don riski : '+lab+'  ('+r.risk+'/100)');
   L.push('  Durum     : '+(r.risk>=76?'Ciddi don zararı riski':r.risk>=56?'Yüksek don riski':r.risk>=31?'Orta düzeyde risk':'Düşük risk'));
-  L.push('  Hazırlık  : '+(r.hasEquip?pl[0]+' ('+r.prep+'/100)':'aktif ekipman yok'));
+  L.push('  Hazırlık  : '+(r.hasEquip?pl[0]:'aktif ekipman yok')+'  (riski düşürmez, zararı azaltır)');
   L.push('');
   L.push('▌ KONUM');
   L.push('  İlçe      : '+d.name+(el('localName').value?' / '+el('localName').value:''));
