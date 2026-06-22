@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Malatya Kayısısı Don KDS v1.5</title>
+<title>Malatya Kayısısı Don KDS v1.6</title>
 
 <!-- Leaflet CSS (topografik harita) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -39,6 +39,7 @@ main{padding:12px 10px 32px}
 .card h2 .icon{font-size:20px}
 .card h3{font-size:15px;margin:15px 0 8px;color:#4a2a10;font-weight:700}
 .h3-note{font-size:12px;font-weight:600;color:#8a7558}
+.field-note{font-size:12.5px;color:#6b5c4a;line-height:1.5;margin:8px 0 0;padding:9px 11px;background:#faf6ee;border-left:3px solid #c89048;border-radius:8px}
 
 .status{font-size:13.5px;color:#4b3925;background:#fff4d8;border:1px solid #ead19f;padding:10px 13px;border-radius:12px;margin-bottom:10px;display:flex;align-items:flex-start;gap:7px}
 .status::before{content:'ℹ️';flex-shrink:0}
@@ -185,6 +186,25 @@ input.auto-filled{background:#f4faf6}
 #resultCard{border:2px solid #e8c98f;background:linear-gradient(180deg,#fffdf6,#fffaf0)}
 #resultCard h2{font-size:19px}
 
+/* Adres arama */
+.addr-search{margin-bottom:12px;background:#f0f7fc;border:1.5px solid #bcdcef;border-radius:13px;padding:11px}
+.addr-search label{display:block;font-size:13px;font-weight:750;color:#1a5c88;margin-bottom:6px}
+.addr-row{display:flex;gap:8px}
+.addr-row input{flex:1}
+.addr-row button{white-space:nowrap;flex-shrink:0}
+.addr-results{margin-top:9px;display:flex;flex-direction:column;gap:5px;max-height:230px;overflow-y:auto}
+.addr-item{display:flex;align-items:center;gap:9px;text-align:left;background:white;border:1.5px solid #cfe2f0;border-radius:10px;padding:11px 12px;font-size:14px;color:#234;cursor:pointer;min-height:48px;font-weight:600}
+.addr-item:hover{background:#eaf4fc;border-color:#7fb6dd}
+.addr-pin{flex-shrink:0;font-size:16px}
+.addr-name{line-height:1.35}
+.addr-loading,.addr-empty{font-size:13.5px;color:#5a6a76;padding:10px;text-align:center}
+
+/* Boş durum (kademeli açma) — yönlendirici yüzey */
+.empty-state{text-align:center;padding:26px 18px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.empty-icon{font-size:46px;line-height:1}
+.empty-title{font-size:17px;font-weight:800;color:#7a3d00}
+.empty-text{font-size:14px;color:#6b5c4a;line-height:1.55;max-width:380px}
+
 /* Hazırlık (preparedness) göstergesi — riskten ayrı, mavi tonlu (risk kırmızı/turuncu ile karışmasın) */
 .prep-box{border-radius:14px;padding:11px 12px;margin-top:12px;border:1px solid #b8d4e8;background:#eef6fc}
 .prep-box.prep-high{border-color:#9fd0b4;background:#edf8f1}
@@ -233,7 +253,7 @@ input.auto-filled{background:#f4faf6}
       <div class="logo">🌸</div>
       <div>
         <h1>Malatya Kayısısı Zirai Don Karar Destek Sistemi</h1>
-        <p>v1.5 — Sade arayüz · Sonuç önde · Uydu harita · Yaşlı dostu</p>
+        <p>v1.6 — Önce konum seç · Adres arama · Yer isimli harita · Yaşlı dostu</p>
       </div>
     </div>
     <div class="badges"><span class="badge" id="netBadge">Bağlantı denetleniyor…</span></div>
@@ -248,9 +268,19 @@ input.auto-filled{background:#f4faf6}
       <!-- MAP -->
       <div class="card">
         <h2><span class="icon">🗺️</span>Bahçe konumunu seç</h2>
+
+        <div class="addr-search">
+          <label for="addrInput">📨 Adres veya yer adıyla ara</label>
+          <div class="addr-row">
+            <input id="addrInput" type="text" placeholder="Örn: Orduzu Malatya, Battalgazi, Akçadağ köyü" onkeydown="if(event.key==='Enter')searchAddress()">
+            <button class="blue" type="button" onclick="searchAddress()">🔍 Bul</button>
+          </div>
+          <div id="addrResults" class="addr-results" style="display:none"></div>
+        </div>
+
         <div class="mapbox">
           <div class="maphead">
-            <b id="mapLayerName">Uydu görünümü</b>
+            <b id="mapLayerName">Yer isimli harita</b>
             <div class="mh-btns">
               <button class="blue" type="button" onclick="useMyLocation()">📍 Konumum</button>
               <button type="button" onclick="cycleBaseLayer()">🔀 Görünüm değiştir</button>
@@ -260,12 +290,12 @@ input.auto-filled{background:#f4faf6}
           <div class="map-fallback" id="mapFallback">
             <div style="font-size:32px">🗺️</div>
             <div style="font-weight:700;color:#7a3d00">Harita yüklenemedi</div>
-            <div class="small" style="max-width:340px">İnternet bağlantısı yok ya da harita servisi engelli. Aşağıdaki basit sınır haritasından ilçe seçebilir veya koordinatları elle girebilirsin.</div>
+            <div class="small" style="max-width:340px">İnternet bağlantısı yok ya da harita servisi engelli. Aşağıdaki basit sınır haritasından ilçenizi seçebilir veya koordinatları elle girebilirsiniz.</div>
             <svg id="fallbackSvg" viewBox="0 0 760 480" style="max-height:280px" onclick="fallbackMapClick(event)"></svg>
           </div>
           <div class="maphint">
             <span>👆</span>
-            <span id="mapHintText">Haritada bahçenin tam yerine dokun. Pin'i sürükleyerek de ayarlayabilirsin.</span>
+            <span id="mapHintText">Haritada bahçenizin tam yerine dokunun. Pin'i sürükleyerek de ayarlayabilirsiniz.</span>
           </div>
         </div>
         <div class="chips" id="coordChips"></div>
@@ -330,6 +360,7 @@ input.auto-filled{background:#f4faf6}
         <div class="checks">
           <label class="check"><input type="checkbox" id="cInsured"><span>📋 TARSİM / tarım sigortam var</span></label>
         </div>
+        <p class="field-note">TARSİM (Tarım Sigortaları Havuzu), don olduktan sonra ürün kaybınızı maddi olarak karşılar; donun gelmesini engellemez ve risk puanını değiştirmez. Bu kutuyu işaretlerseniz, raporda hasar bildirimi için yapmanız gerekenler hatırlatılır. Henüz sigortanız yoksa, don mevsiminden önce bir TARSİM acentesine veya ziraat odanıza başvurmanız önerilir.</p>
       </div>
     </section>
 
@@ -373,13 +404,16 @@ input.auto-filled{background:#f4faf6}
           </div>
         </details>
 
-        <div class="footnote">Zarar eşikleri: Malatya Kayısı Araştırma Enstitüsü ve WSU EB1240 verilerine dayanır. Harita: OpenStreetMap / OpenTopoMap / Esri. Hava: <b>Open-Meteo</b> (ECMWF/DWD ICON). Resmi uyarı yerine geçmez.</div>
+        <div class="footnote">Zarar eşikleri: Malatya Kayısı Araştırma Enstitüsü ve WSU EB1240 verilerine dayanır. Harita: OpenStreetMap / OpenTopoMap / Esri. Adres arama: Nominatim (OpenStreetMap). Hava: <b>Open-Meteo</b> (ECMWF/DWD ICON). Bu uygulama bir karar destek aracıdır; resmî uyarı yerine geçmez.</div>
       </div>
 
-      <div class="card">
-        <h2><span class="icon">📄</span>Rapor çıktısı</h2>
-        <p class="help">Bu raporu kopyalayıp paylaşabilir veya dosya olarak kaydedebilirsin.</p>
-        <textarea id="report" class="report" readonly></textarea>
+      <div class="card" id="reportCard">
+        <h2><span class="icon">📄</span>Rapor</h2>
+        <p class="help">Konumu ve bahçe bilgilerinizi seçtikten sonra "Rapor hazırla" düğmesiyle raporu oluşturun. Sonra kopyalayabilir veya dosya olarak kaydedebilirsiniz.</p>
+        <div class="btns" style="margin-bottom:10px">
+          <button class="primary" type="button" onclick="generateReport()">📝 Rapor hazırla</button>
+        </div>
+        <textarea id="report" class="report" readonly placeholder="Rapor, konum ve bahçe bilgileri seçildikten sonra 'Rapor hazırla' düğmesiyle oluşturulur."></textarea>
         <div class="btns">
           <button type="button" onclick="copyReport()">📋 Kopyala</button>
           <button type="button" onclick="downloadReport()">⬇️ TXT indir</button>
@@ -432,6 +466,9 @@ var MALATYA_CENTER = [38.42, 38.30];
 var selectedKey='merkez', lastAnalysis=null, fetchedHourly=null;
 var realElevation=null, isOnline=navigator.onLine;
 var map=null, marker=null, provinceLayer=null, baseLayers=[], currentLayer=0, mapReady=false;
+/* Progressive disclosure: çiftçi konumu seçene kadar risk/hava hesaplanmaz,
+   rapor da "rapor hazırla" denene kadar boş kalır. */
+var locationSelected=false, reportGenerated=false;
 
 function el(id){ return document.getElementById(id); }
 function clamp(v,mn,mx){ return Math.max(mn,Math.min(mx,v)); }
@@ -476,26 +513,26 @@ function autoDewPoint(){
 function initMap(){
   if(typeof L==='undefined'){ showFallback('Leaflet kütüphanesi yüklenemedi (internet?).'); return; }
   try{
-    map=L.map('leafletMap',{ center:MALATYA_CENTER, zoom:9, minZoom:7, maxZoom:17, zoomControl:true });
+    map=L.map('leafletMap',{ center:MALATYA_CENTER, zoom:9, minZoom:7, maxZoom:18, zoomControl:true });
 
-    /* Base layer 0: Esri uydu (tarlalar görünür — varsayılan, ilk açılan) */
-    var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
-      maxZoom:18, attribution:'© Esri World Imagery'
-    });
-    /* Base layer 1: OpenTopoMap (topografik, kabartmalı, köy isimli) */
-    var topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{
-      maxZoom:17, attribution:'© OpenTopoMap (CC-BY-SA) © OpenStreetMap'
-    });
-    /* Base layer 2: OSM standart (sokak/mahalle detayı) */
+    /* Base layer 0: OpenStreetMap (yer isimleri + yeşil alanlar — varsayılan) */
     var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
       maxZoom:19, attribution:'© OpenStreetMap'
     });
-    baseLayers=[sat,topo,osm];
-    var layerNames=['Uydu (tarlalar)','Topografik','Sokak haritası'];
-    sat.addTo(map);
+    /* Base layer 1: Esri uydu (tarlalar görünür) */
+    var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+      maxZoom:18, attribution:'© Esri World Imagery'
+    });
+    /* Base layer 2: OpenTopoMap (topografik, kabartmalı) */
+    var topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{
+      maxZoom:17, attribution:'© OpenTopoMap (CC-BY-SA) © OpenStreetMap'
+    });
+    baseLayers=[osm,sat,topo];
+    var layerNames=['Yer isimli harita','Uydu (tarlalar)','Topografik'];
+    osm.addTo(map);
     currentLayer=0;
 
-    sat.on('load', function(){ mapReady=true; });
+    osm.on('load', function(){ mapReady=true; });
 
     /* Draw Malatya province boundary (approximate) */
     drawProvinceBoundary();
@@ -503,14 +540,8 @@ function initMap(){
     /* District markers */
     addDistrictMarkers();
 
-    /* Draggable pin */
-    var d=DISTRICTS[selectedKey];
-    marker=L.marker([d.lat,d.lon],{draggable:true}).addTo(map);
-    marker.on('dragend', function(){
-      var ll=marker.getLatLng();
-      handleNewLocation(ll.lat, ll.lng, true);
-    });
-    marker.bindPopup('Bahçe konumu');
+    /* Pin başlangıçta YOK — çiftçi haritaya dokununca/ilçe seçince oluşturulur.
+       (Kademeli açma: önce konum seç, sonra risk gelir.) */
 
     /* Click to place pin */
     map.on('click', function(e){
@@ -520,8 +551,17 @@ function initMap(){
     /* Store layer names for cycling */
     map._layerNames=layerNames;
 
+    /* Malatya'yı tamamen içine al, güney ve batıya doğru biraz taşır.
+       İl sınırı: güney ~37.85, batı ~37.30, kuzey ~39.18, doğu ~39.15.
+       Güney-batıya ekstra pay vererek o yönlerde taşma/çerçeve dışı his sağlanır. */
+    var malatyaBounds=L.latLngBounds(
+      L.latLng(37.70, 37.10),   /* güney-batı köşe (belirgin taşkın) */
+      L.latLng(39.25, 39.20)    /* kuzey-doğu köşe */
+    );
+    map.fitBounds(malatyaBounds, {padding:[6,6]});
+
     mapReady=true;
-    setTimeout(function(){ if(map) map.invalidateSize(); },200);
+    setTimeout(function(){ if(map){ map.invalidateSize(); map.fitBounds(malatyaBounds,{padding:[6,6]}); } },200);
     return true;
   }catch(err){
     showFallback('Harita başlatılamadı: '+err.message);
@@ -639,9 +679,19 @@ function handleNewLocation(lat,lon,fromMap,forceKey){
   el('elevTag').textContent='tahmini'; el('elevTag').className='tag';
   el('elev').value=estimateElevation(lat,lon,selectedKey);
 
+  /* İlk konum seçimi: pin'i oluştur/göster ve kademeli açmayı başlat */
+  var firstSelection = !locationSelected;
+  locationSelected=true;
+
   /* Move map + pin */
-  if(map && marker){
-    marker.setLatLng([lat,lon]);
+  if(map){
+    if(!marker){
+      marker=L.marker([lat,lon],{draggable:true}).addTo(map);
+      marker.on('dragend', function(){ var ll=marker.getLatLng(); handleNewLocation(ll.lat, ll.lng, true); });
+      marker.bindPopup('Bahçe konumu');
+    } else {
+      marker.setLatLng([lat,lon]);
+    }
     if(forceKey) map.setView([lat,lon], Math.max(map.getZoom(),11));
   }
 
@@ -651,8 +701,7 @@ function handleNewLocation(lat,lon,fromMap,forceKey){
   el('chartWrap').style.display='none';
 
   analyze();
-  /* Konum değişince hava verisini de otomatik yenile (hızlı art arda değişimler için debounce).
-     fetchWeather elevation'ı da getirir. */
+  /* Konum seçilince/değişince hava verisini otomatik çek (debounce). */
   if(isOnline) scheduleWeatherRefresh();
 }
 
@@ -664,22 +713,72 @@ function scheduleWeatherRefresh(){
 }
 
 window.districtChanged=function(){
-  var k=el('district').value, d=DISTRICTS[k];
+  var k=el('district').value;
+  if(!k){ return; }  /* boş seçim (— İlçe seçin —) */
+  var d=DISTRICTS[k];
   handleNewLocation(d.lat,d.lon,false,k);
   setStatus(d.name+' seçildi.','ok');
 };
 
+/* ═══════════════ AKILLI ADRES ARAMA (Nominatim/OpenStreetMap geocoding) ═══════════════ */
+window.searchAddress=function(){
+  var q=el('addrInput').value.trim();
+  if(!q){ setStatus('Aramak için bir adres veya yer adı yazın.','bad'); return; }
+  if(!navigator.onLine){ setStatus('Adres araması için internet gerekir. Haritadan elle seçebilirsiniz.','bad'); return; }
+
+  var box=el('addrResults');
+  box.style.display='block';
+  box.innerHTML='<div class="addr-loading">🔍 Aranıyor…</div>';
+
+  /* Malatya çevresine öncelik ver (viewbox) ve Türkiye ile sınırla */
+  var url='https://nominatim.openstreetmap.org/search'
+    +'?q='+encodeURIComponent(q)
+    +'&format=json&addressdetails=1&limit=6&countrycodes=tr'
+    +'&viewbox=37.0,39.4,39.4,37.7&bounded=0&accept-language=tr';
+
+  fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(list){
+    if(!list||!list.length){
+      box.innerHTML='<div class="addr-empty">Sonuç bulunamadı. Farklı bir yazım deneyin ya da haritadan elle seçin.</div>';
+      return;
+    }
+    box.innerHTML=list.map(function(item,i){
+      var name=item.display_name||'';
+      var shortName=name.split(',').slice(0,3).join(',');
+      return '<button type="button" class="addr-item" onclick="pickAddress('+item.lat+','+item.lon+',\''+
+        encodeURIComponent(shortName).replace(/'/g,"%27")+'\')">'+
+        '<span class="addr-pin">📍</span><span class="addr-name">'+shortName+'</span></button>';
+    }).join('');
+  }).catch(function(err){
+    box.innerHTML='<div class="addr-empty">Arama yapılamadı ('+err.message+'). Haritadan elle seçebilirsiniz.</div>';
+  });
+};
+
+window.pickAddress=function(lat,lon,encName){
+  var name=decodeURIComponent(encName);
+  handleNewLocation(parseFloat(lat),parseFloat(lon),true);
+  if(map) map.setView([lat,lon],13);
+  /* Mahalle/mevki alanına ilk parçayı yaz */
+  var firstPart=name.split(',')[0].trim();
+  if(firstPart && el('localName')) el('localName').value=firstPart;
+  el('addrResults').style.display='none';
+  el('addrInput').value=name.split(',').slice(0,2).join(',');
+  setStatus('Konum seçildi: '+firstPart,'ok');
+};
+
 window.useMyLocation=function(){
   if(!navigator.geolocation){ setStatus('Cihazın konum servisi yok.','bad'); return; }
-  setStatus('Konumun alınıyor…','loading');
+  setStatus('Konumunuz alınıyor…','loading');
   navigator.geolocation.getCurrentPosition(function(pos){
     var lat=pos.coords.latitude, lon=pos.coords.longitude;
     var key=nearestDistrict(lat,lon);
     handleNewLocation(lat,lon,true);
     if(map) map.setView([lat,lon],13);
-    setStatus('GPS konumun alındı (en yakın: '+DISTRICTS[key].name+').','ok');
+    setStatus('GPS konumunuz alındı (en yakın ilçe: '+DISTRICTS[key].name+').','ok');
   }, function(err){
-    setStatus('Konum alınamadı: '+err.message+'. Haritadan elle seç.','bad');
+    setStatus('Konum alınamadı: '+err.message+'. Haritadan elle seçebilirsiniz.','bad');
   }, {enableHighAccuracy:true, timeout:10000});
 };
 
@@ -697,13 +796,13 @@ function updateCoordChips(){
 /* ═══════════════ OPEN-METEO: WEATHER (geliştirilmiş hata teşhisi) ═══════════════ */
 window.fetchWeather=function(){
   var lat=parseFloat(el('lat').value), lon=parseFloat(el('lon').value);
-  if(!isFinite(lat)||!isFinite(lon)){ setStatus('Önce haritadan konum seç.','bad'); return; }
+  if(!isFinite(lat)||!isFinite(lon)){ setStatus('Önce haritadan konumunuzu seçin.','bad'); return; }
 
   el('diagBox').style.display='none';
 
   if(!navigator.onLine){
     showDiag('offline');
-    setStatus('İnternet bağlantısı yok. Değerleri elle gir, "Analiz et"e bas.','bad');
+    setStatus('İnternet bağlantısı yok. Hava değerlerini elle girebilirsiniz.','bad');
     return;
   }
 
@@ -735,10 +834,10 @@ window.fetchWeather=function(){
     var isFileProto = location.protocol==='file:';
     if(isFileProto){
       showDiag('file');
-      setStatus('Hava verisi çekilemedi — sayfa dosyadan açılmış (file://). Aşağıdaki çözüme bak.','bad');
+      setStatus('Hava verisi çekilemedi — sayfa dosyadan açılmış (file://). Aşağıdaki çözüme bakın.','bad');
     } else if(err.message.indexOf('Failed to fetch')>=0 || err.message.indexOf('NetworkError')>=0){
       showDiag('network');
-      setStatus('Hava verisine ulaşılamadı (ağ/CORS). Aşağıdaki çözüme bak.','bad');
+      setStatus('Hava verisine ulaşılamadı (ağ/güvenlik engeli). Aşağıdaki çözüme bakın.','bad');
     } else {
       showDiag('other', err.message);
       setStatus('Hava verisi hatası: '+err.message,'bad');
@@ -750,27 +849,27 @@ function showDiag(type, detail){
   var box=el('diagBox'); var html='';
   if(type==='file'){
     html='<b>⚠️ Sorun: Sayfa dosyadan açılmış (file://)</b><br>'+
-      'Tarayıcılar güvenlik gereği <code>file://</code> sayfalarından internet verisi çekmeyi engeller. '+
-      'Hava verisi için sayfanın bir web sunucusundan (http/https) açılması gerekir.<br><br>'+
+      'Tarayıcılar güvenlik gereği <code>file://</code> ile açılan sayfaların internetten veri çekmesini engeller. '+
+      'Hava verisinin gelmesi için sayfanın bir web adresinden (http/https) açılması gerekir.<br><br>'+
       '<b>Çözümler:</b><br>'+
-      '• <b>En kolay:</b> Bu dosyayı bir web hosting\'e yükle (GitHub Pages, Netlify — ücretsiz) ve oradan aç.<br>'+
-      '• <b>Bilgisayarda:</b> Dosyanın olduğu klasörde terminal aç, <code>python -m http.server</code> yaz, sonra tarayıcıda <code>localhost:8000</code> aç.<br>'+
-      '• <b>Şimdilik:</b> Hava değerlerini elle gir (MGM sitesinden bakıp) ve "Analiz et"e bas — motor çalışır.';
+      '• <b>En kolay:</b> Bu dosyayı ücretsiz bir yayın hizmetine (GitHub Pages, Netlify) yükleyip oradan açın.<br>'+
+      '• <b>Bilgisayarda:</b> Dosyanın bulunduğu klasörde komut satırı açıp <code>python -m http.server</code> yazın, sonra tarayıcıda <code>localhost:8000</code> adresini açın.<br>'+
+      '• <b>Şimdilik:</b> Hava değerlerini "Hava değerlerini elle düzenle" bölümünden elle girebilirsiniz; hesaplama yine çalışır.';
   } else if(type==='network'){
-    html='<b>⚠️ Sorun: İnternete veya harita/hava servisine ulaşılamıyor</b><br>'+
-      'Open-Meteo\'ya bağlanılamadı. Olası nedenler:<br>'+
+    html='<b>⚠️ Sorun: Hava servisine ulaşılamıyor</b><br>'+
+      'Open-Meteo hava servisine bağlanılamadı. Olası nedenler:<br>'+
       '• İnternet bağlantısı kopuk olabilir.<br>'+
-      '• Okul/kurum ağı <code>api.open-meteo.com</code>\'u engelliyor olabilir.<br>'+
-      '• Mobil veride geçici kesinti.<br><br>'+
-      '<b>Çözüm:</b> Farklı bir ağ dene (mobil veri ↔ WiFi), ya da hava değerlerini elle girip "Analiz et"e bas.';
+      '• Bağlı olduğunuz ağ (okul/kurum) bu servisi engelliyor olabilir.<br>'+
+      '• Mobil veride geçici bir kesinti olabilir.<br><br>'+
+      '<b>Çözüm:</b> Farklı bir ağ deneyin (mobil veri ↔ WiFi) ya da hava değerlerini elle girin.';
   } else if(type==='offline'){
-    html='<b>🟡 Çevrimdışısın</b><br>'+
-      'İnternet bağlantısı yok. Hava verisi çekilemez ama motor elle girişle çalışır.<br>'+
-      'MGM uygulamasından/sitesinden bu gecenin en düşük sıcaklık, nem, rüzgâr değerlerine bakıp '+
-      'yukarıdaki alanlara gir, "Analiz et"e bas.';
+    html='<b>🟡 Çevrimdışısınız</b><br>'+
+      'İnternet bağlantısı olmadığı için hava verisi çekilemiyor, ancak değerleri elle girerek hesaplama yapabilirsiniz.<br>'+
+      'MGM uygulamasından veya sitesinden bu gecenin en düşük sıcaklık, nem ve rüzgâr değerlerine bakıp '+
+      '"Hava değerlerini elle düzenle" bölümüne girebilirsiniz.';
   } else {
     html='<b>⚠️ Beklenmeyen hata</b><br><code>'+(detail||'bilinmiyor')+'</code><br><br>'+
-      'Hava değerlerini elle girip "Analiz et"e basarak devam edebilirsin.';
+      'Hava değerlerini elle girerek devam edebilirsiniz.';
   }
   box.innerHTML=html; box.style.display='block';
 }
@@ -989,7 +1088,7 @@ function calc(){
   /* ── TAVSİYELER ── */
   if(t<=st.critical){
     if(checked('eqSprinkler')) advice.push(['💧 Yağmurlama sulama','Sıcaklık 0°C\'ye yaklaşmadan başlat; don çözülüp güvenli seviyeye çıkana kadar kesme. Kesinti zararı artırır.']);
-    if(checked('eqFan')){ if(radiation) advice.push(['🌀 Fan / rüzgâr makinesi','Radyasyon donu — inversyon varsa fan üst katmandan ısı karıştırır. Sıcaklık takibiyle çalıştır.']); else cautions.push('Adveksiyon/rüzgârlı donda fan tek başına yetersiz; soğuk hava kütlesini ısıtmaz.'); }
+    if(checked('eqFan')){ if(radiation) advice.push(['🌀 Fan / rüzgâr makinesi','Radyasyon donunda sıcaklık enverziyonu (üstte sıcak, altta soğuk hava) varsa fan üstteki ılık havayı aşağı karıştırır. Sıcaklığı izleyerek çalıştırın.']); else cautions.push('Adveksiyon (rüzgârlı) donda fan tek başına yetersizdir; sürekli gelen soğuk hava kütlesini ısıtamaz.'); }
     if(checked('eqHeater')) advice.push(['🔥 Soba / ısıtıcı','Riskli saatten önce hazırlık; yakıt, güvenlik mesafesi, iş gücü planı.']);
     if(checked('eqDrip')) advice.push(['🚿 Damla sulama','Gündüzden toprak nemi artırılırsa gece ısı kapasitesi yükselir. Tek başına aktif koruma değil.']);
     if(!hasEquip) advice.push(['⚠️ Aktif ekipman yok','MGM uyarılarını takip et; gece sıcaklık ölç, sabah hasarı belgele, TARSİM belgelerini hazırla.']);
@@ -1028,6 +1127,8 @@ function prepLabel(p,hasEquip){
 }
 
 window.analyze=function(){
+  /* Kademeli açma: konum seçilmemişse hesaplama yapma, yönlendirici mesajı koru. */
+  if(!locationSelected){ showEmptyStates(); return; }
   try{
     var r=calc(); lastAnalysis=r; var lab=riskLabel(r.risk);
     var simple=r.risk>=76?'Bu gece ciddi don zararı riski var. Riskli saatlerden önce aktif tedbirler başlatılmalı.':r.risk>=56?'Don riski yüksek. Tedbir planını gözden geçir.':r.risk>=31?'Orta düzeyde don riski var. Gece takibi ve yerel termometre önerilir.':'Don riski düşük görünüyor. Uyarıları ve termometreyi yine de takip et.';
@@ -1054,9 +1155,21 @@ window.analyze=function(){
     r.reasons.forEach(function(x){html+='<li>'+x+'</li>';}); html+='</ul></div></details>';
 
     html+='<details class="tech-details"><summary>🔢 Teknik puanlama detayı</summary><div class="why-body"><div class="kv"><div><b>Temel tehlike</b>'+r.hazard+' / 100</div><div><b>Don risk puanı</b>'+r.risk+' / 100</div><div><b>Hazırlık</b>'+(r.hasEquip?r.prep+' / 100':'—')+'</div><div><b>Don tipi</b>'+r.freezeType+'</div><div><b>Rüzgâr</b>'+fmt(r.wind,1)+' m/s</div><div><b>Nem</b>'+fmt(r.hum,0)+'%</div></div><p class="tech-note">Risk = don tehlikesi (sıcaklık + fenolojik evre + tehlikeyle orantılı arazi/bahçe faktörleri). Hazırlık ayrı gösterilir; ekipman riski düşürmez, gerçekleşecek hasarı azaltır.</p></div></details>';
-    el('result').innerHTML=html; buildReport(r);
-    setStatus('Analiz çalıştı ('+new Date().toLocaleTimeString('tr-TR')+').','ok');
-  }catch(e){ setStatus('Analiz hatası: '+e.message,'bad'); console.error(e); }
+    el('result').innerHTML=html;
+    /* Rapor yalnızca çiftçi "Rapor hazırla" dediyse güncellenir; aksi halde boş kalır. */
+    if(reportGenerated) buildReport(r);
+    setStatus('Don riski hesaplandı ('+new Date().toLocaleTimeString('tr-TR')+').','ok');
+  }catch(e){ setStatus('Hesaplama hatası: '+e.message,'bad'); console.error(e); }
+};
+
+/* Çiftçi "Rapor hazırla" düğmesine basınca raporu oluştur */
+window.generateReport=function(){
+  if(!locationSelected){ setStatus('Önce haritadan konum seçin.','bad'); return; }
+  if(!lastAnalysis){ analyze(); }
+  reportGenerated=true;
+  if(lastAnalysis) buildReport(lastAnalysis);
+  setStatus('Rapor hazırlandı. Kopyalayabilir veya indirebilirsiniz.','ok');
+  var rc=el('reportCard'); if(rc) rc.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
 
 function buildReport(r){
@@ -1131,11 +1244,13 @@ window.demoSafe=function(){
 
 window.copyReport=function(){
   var t=el('report').value;
+  if(!t||!reportGenerated){ setStatus('Önce "Rapor hazırla" düğmesine basın.','bad'); return; }
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function(){setStatus('Rapor kopyalandı.','ok');}).catch(fallbackCopy);
   else fallbackCopy();
 };
-function fallbackCopy(){ try{el('report').select(); document.execCommand('copy'); setStatus('Rapor seçildi (Ctrl+C).','ok');}catch(e){setStatus('Kopyalama başarısız.','bad');} }
+function fallbackCopy(){ try{el('report').select(); document.execCommand('copy'); setStatus('Rapor seçildi (Ctrl+C ile kopyalayın).','ok');}catch(e){setStatus('Kopyalama başarısız.','bad');} }
 window.downloadReport=function(){
+  if(!el('report').value||!reportGenerated){ setStatus('Önce "Rapor hazırla" düğmesine basın.','bad'); return; }
   try{ var blob=new Blob([el('report').value],{type:'text/plain;charset=utf-8'}); var a=document.createElement('a');
     a.href=URL.createObjectURL(blob); a.download='malatya_kayisi_don_raporu_'+new Date().toISOString().slice(0,10)+'.txt';
     document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},600);
@@ -1147,21 +1262,27 @@ function updateNetBadge(){
   if(isOnline){b.textContent='🟢 Çevrimiçi';b.className='badge live';}
   else{b.textContent='🟡 Çevrimdışı';b.className='badge off';}
 }
-window.addEventListener('online',function(){updateNetBadge();setStatus('İnternet geldi. Hava verisi çekebilirsin.','ok');});
-window.addEventListener('offline',function(){updateNetBadge();setStatus('İnternet kesildi. Manuel giriş ile devam et.','bad');});
+window.addEventListener('online',function(){updateNetBadge();setStatus('İnternet bağlantısı geldi. Hava verisini yenileyebilirsiniz.','ok');});
+window.addEventListener('offline',function(){updateNetBadge();setStatus('İnternet bağlantısı kesildi. Değerleri elle girerek devam edebilirsiniz.','bad');});
 
 function bindInputs(){
   ['lat','lon','elev','terrain','stage','variety','minTemp','duration','wind','humidity','cloud','dew','localName'].forEach(function(id){
     el(id).addEventListener('change',function(){
       if(id==='lat'||id==='lon'){
-        var lat=num('lat'),lon=num('lon'); selectedKey=nearestDistrict(lat,lon); el('district').value=selectedKey;
-        if(map&&marker){marker.setLatLng([lat,lon]);} updateCoordChips();
-        if(isOnline) scheduleWeatherRefresh();
+        var lat=num('lat'),lon=num('lon');
+        if(isFinite(lat)&&isFinite(lon)&&lat!==0&&lon!==0){
+          locationSelected=true;
+          selectedKey=nearestDistrict(lat,lon); el('district').value=selectedKey;
+          if(map){
+            if(!marker){ marker=L.marker([lat,lon],{draggable:true}).addTo(map); marker.on('dragend',function(){var ll=marker.getLatLng();handleNewLocation(ll.lat,ll.lng,true);}); }
+            else marker.setLatLng([lat,lon]);
+          }
+          updateCoordChips();
+          if(isOnline) scheduleWeatherRefresh();
+        }
       }
       if(id==='elev'){realElevation=null;el('elevTag').textContent='elle girildi';el('elevTag').className='tag';}
-      /* Sıcaklık veya nem değişince çiy noktasını otomatik güncelle */
       if(id==='minTemp'||id==='humidity'){ autoDewPoint(); }
-      /* Kullanıcı çiy noktasını elle değiştirirse otomatik etiketini kaldır */
       if(id==='dew'){ el('dew').classList.remove('auto-filled'); if(el('dewTag')){el('dewTag').textContent='elle girildi';el('dewTag').className='tag';} }
       analyze();
     });
@@ -1171,25 +1292,36 @@ function bindInputs(){
 
 function init(){
   updateNetBadge();
-  el('district').innerHTML=Object.keys(DISTRICTS).map(function(k){return '<option value="'+k+'">'+DISTRICTS[k].name+'</option>';}).join('');
+  el('district').innerHTML='<option value="">— İlçe seçin —</option>'+Object.keys(DISTRICTS).map(function(k){return '<option value="'+k+'">'+DISTRICTS[k].name+'</option>';}).join('');
+  /* Başlangıçta konum SEÇİLMEMİŞ — varsayılan değerler arka planda hazır ama
+     çiftçi haritadan/ilçeden seçim yapana kadar risk hesaplanmaz. */
   var d=DISTRICTS[selectedKey];
-  el('district').value=selectedKey; el('terrain').value=d.terrain;
-  el('lat').value=fmt(d.lat,6); el('lon').value=fmt(d.lon,6); el('elev').value=d.elev;
-  updateCoordChips(); bindInputs(); autoDewPoint(); analyze();
+  el('district').value=''; el('terrain').value=d.terrain;
+  el('lat').value=''; el('lon').value=''; el('elev').value='';
+  bindInputs();
+
+  /* Boş durum mesajlarını göster (öğretici yüzeyler) */
+  showEmptyStates();
 
   /* Init map (with fallback) */
   var mapOk=initMap();
-  if(!mapOk && !isOnline) showFallback('Çevrimdışı — topografik harita yüklenemez.');
+  if(!mapOk && !isOnline) showFallback('Çevrimdışı — harita yüklenemez.');
 
-  if(isOnline){
-    setStatus('Sistem hazır. Seçili konum için hava verisi çekiliyor…','loading');
-    /* Açılışta seçili konum (Malatya Merkez) için hava verisini otomatik çek.
-       fetchWeather elevation'ı da getirir. Harita render olduktan sonra çağır. */
-    setTimeout(function(){ if(isOnline) fetchWeather(); }, 400);
-  } else {
-    showFallback('Çevrimdışısın.');
-    setStatus('Sistem hazır (çevrimdışı). Değerleri elle gir, "Analiz et"e bas.','ok');
-  }
+  setStatus('Başlamak için haritadan bahçenizin yerine dokunun veya ilçenizi seçin.','ok');
+}
+
+/* Boş durumlar: konum seçilene kadar yönlendirici mesajlar */
+function showEmptyStates(){
+  el('result').innerHTML='<div class="empty-state">'+
+    '<div class="empty-icon">📍</div>'+
+    '<div class="empty-title">Lütfen çiftliğinizin konumunu seçin</div>'+
+    '<div class="empty-text">Haritada bahçenizin bulunduğu yere dokunun ya da yukarıdan ilçenizi seçin. '+
+    'Konumu seçtikten sonra bu gecenin don riski otomatik hesaplanacak.</div>'+
+    '</div>';
+  el('report').value='';
+  el('report').placeholder='Rapor, konum ve bahçe bilgileri seçildikten sonra "Rapor hazırla" düğmesiyle oluşturulur.';
+  el('feedBox').style.display='none';
+  el('chartWrap').style.display='none';
 }
 window.onerror=function(msg,src,line){ setStatus('Sayfa hatası: '+msg+' (satır '+line+')','bad'); };
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
